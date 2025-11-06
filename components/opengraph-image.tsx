@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 import LogoIcon from './icons/logo';
-import { join } from 'path';
-import { readFile } from 'fs/promises';
+// Force edge runtime for OG image generation to avoid Node URL/file path issues on some platforms
+export const runtime = 'edge';
 
 export type Props = {
   title?: string;
@@ -17,8 +17,11 @@ export default async function OpengraphImage(
     ...props
   };
 
-  const file = await readFile(join(process.cwd(), './fonts/Inter-Bold.ttf'));
-  const font = Uint8Array.from(file).buffer;
+  // In the edge runtime we can't use Node fs; fetch the font as an ArrayBuffer instead.
+  const fontUrl = new URL('../fonts/Inter-Bold.ttf', import.meta.url);
+  const fontRes = await fetch(fontUrl.href);
+  const fontBuffer = await fontRes.arrayBuffer();
+  const font = fontBuffer;
 
   return new ImageResponse(
     (
