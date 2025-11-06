@@ -25,11 +25,32 @@ export async function POST(request: Request) {
     const event = payload.event || payload.event_type || '';
 
     if (event === 'payment.captured' || event === 'payment.authorized' || event === 'order.paid') {
-      // We can optionally create a Shopify order here if desired (requires Admin API token)
-      // For now, attempt to revalidate cart tag so storefront updates.
+      // If enabled, create a Shopify order after successful payment.
+      const createOrderOnPayment = process.env.CREATE_SHOPIFY_ORDER_ON_PAYMENT === 'true';
+
+      if (createOrderOnPayment) {
+        try {
+          // Create a Shopify order using the server-side cart and admin token.
+          const { createShopifyOrderFromCart } = await import('lib/shopify/admin');
+          const { getCart } = await import('lib/shopify');
+
+          const cart = await getCart();
+          if (cart) {
+            // Provide payment info from the Razorpay payload when available.
+            const payment = payload.payload?.payment?.entity || payload.payload?.payment || { id: payload.payload?.payment?.entity?.id };
+            try {
+              await createShopifyOrderFromCart(cart, { provider: 'razorpay', id: payment?.id, email: payment?.email });
+            } catch (orderErr) {
+              console.error('Error creating Shopify order after payment', orderErr);
+            }
+          }
+        } catch (e) {
+          console.warn('Shopify order creation not configured or failed', e);
+        }
+      }
+
+      // Attempt to revalidate cart tag so storefront updates.
       try {
-        // Import via Function to avoid static analysis/type errors in environments
-        // where `next/cache` types aren't available during edit-time.
         const dynamicImport = new Function('return import("next/cache")');
         const mod = await dynamicImport();
         if (mod && typeof mod.revalidateTag === 'function') {
@@ -40,7 +61,6 @@ export async function POST(request: Request) {
           }
         }
       } catch (e) {
-        // If import fails (eg. in test environment), log and continue
         console.warn('Could not import next/cache to revalidate tags', e);
       }
     }
