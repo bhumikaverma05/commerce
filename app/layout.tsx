@@ -3,15 +3,23 @@ import { Navbar } from 'components/layout/navbar';
 import { WelcomeToast } from 'components/welcome-toast';
 import { GeistSans } from 'geist/font/sans';
 import { getCart } from 'lib/shopify';
+import { baseUrl } from 'lib/utils';
 import { ReactNode } from 'react';
 import { Toaster } from 'sonner';
 import './globals.css';
-import { baseUrl } from 'lib/utils';
 
 const { SITE_NAME } = process.env;
 
+let metadataBase: URL | undefined;
+try {
+  metadataBase = new URL(baseUrl);
+} catch (e) {
+  // If baseUrl is not a valid absolute URL in the build environment, leave metadataBase undefined.
+  metadataBase = undefined;
+}
+
 export const metadata = {
-  metadataBase: new URL(baseUrl),
+  ...(metadataBase ? { metadataBase } : {}),
   title: {
     default: SITE_NAME!,
     template: `%s | ${SITE_NAME}`
